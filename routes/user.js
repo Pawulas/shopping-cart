@@ -1,0 +1,100 @@
+var express = require('express');
+var router = express.Router();
+var csrf = require('csurf');
+var passport = require('passport');
+
+var csrffProtection = csrf();
+
+const Order = require('../models/order');
+const Cart = require('../models/cart');
+
+router.use(csrffProtection);
+
+router.get('/profile', isLoggedIn,  function(req, res, next) {
+  Order.find({ user: req.user }, function(err, orders) {
+    var cart;
+    
+    orders.forEach(function(order) {
+      cart = new Cart(order.cart);
+      order.items = cart.generateArray();
+    });
+
+  res.render('user/profile', { orders: orders });
+  
+
+  });
+});
+
+router.get('/logout', isLoggedIn, function(req, res, next) {
+  req.logout();
+  res.redirect('/');
+});
+
+router.use('/', notLoggedIn, function(req, res, next) {
+  next();
+});
+
+router.get('/signup', function(req, res, next) {
+  var messages = req.flash('error');
+  res.render('user/signup', {csrfToken: req.csrfToken(), messages: messages, hasErrors: messages.length > 0 });
+});
+
+router.post('/signup', function(req, res,next) {
+
+  const handerl = passport.authenticate('local', {
+    // successRedirect: '/user/profile',
+    failureRedirect: "/user/signup",
+    failureFlash: true
+  });
+
+  handerl(req, res, next);
+}, function(req, res, next) {
+  if (req.session.oldUrl) {
+    var oldUrl = req.session.oldUrl;
+    req.session.oldUrl = null;
+    res.redirect(oldUrl);
+  } else {
+    res.redirect('/user/profile');
+  }
+});
+
+
+router.get('/signin', function(req, res, next) {
+  var messages = req.flash('error');
+  res.render('user/signin', {csrfToken: req.csrfToken(), messages: messages, hasErrors: messages.length > 0 });
+});
+
+router.post('/signin', function(req, res, next) {
+  const handler = passport.authenticate('local-signin', {
+    // successRedirect: '/user/profile',
+    failureRedirect: "/user/signin",
+    failureFlash: true
+  });
+
+  handler(req, res, next);
+}, function(req, res, next) {
+  if (req.session.oldUrl) {
+    var oldUrl = req.session.oldUrl;
+    req.session.oldUrl = null;
+    res.redirect(oldUrl);
+  } else {
+    res.redirect('/user/profile');
+  }
+});
+
+
+module.exports = router;
+
+function isLoggedIn(req, res, next) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.redirect('/');
+};
+
+function notLoggedIn(req, res, next) {
+  if (!req.isAuthenticated()) {
+    return next();
+  }
+  res.redirect('/');
+};
